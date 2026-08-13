@@ -1,43 +1,64 @@
 import InputForm from './components/InputForm.jsx'
 import ClubList from './components/ClubList.jsx'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
+const API_BASE = import.meta.env.VITE_API_BASE
 
 function App() {
-  const [records, setRecords] = useState(
-  JSON.parse(localStorage.getItem('records') || '[]')
-  )
+  const [records, setRecords] = useState([])
+  const [clubs, setClubs] = useState([])
   const [selectedClub, setSelectedClub] = useState('1W')
 
-  const handleDelete = (id) => {
-    const updated = records.filter((r) => r.id !== id)
-    localStorage.setItem('records', JSON.stringify(updated))
-    setRecords(updated)
+   const fetchClubs = async () => {
+    const res = await fetch(`${API_BASE}/clubs`)
+    const data = await res.json()
+    setClubs(data)
   }
 
-  const handleDeleteAll = (clubName) => {
-    const updated = records.filter((r) => r.club !== clubName)
-    localStorage.setItem('records', JSON.stringify(updated))
-    setRecords(updated)
+  const fetchHistory = async () => {
+    const res = await fetch(`${API_BASE}/history`)
+    const data = await res.json()
+    setRecords(data)
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchClubs/fetchHistoryは非同期関数内でsetStateしており、同期呼び出しではない（eslint-plugin-react-hooks 7.0.1の既知の誤検知）
+    fetchClubs()
+    fetchHistory()
+  }, [])
+
+  const handleDelete = async (id) => {
+    await fetch(`${API_BASE}/history/${id}`, { method: 'DELETE' })
+    fetchHistory()
+  }
+
+  const handleDeleteAll = async (clubName) => {
+    const targets = records.filter((r) => r.club_name === clubName)
+    await Promise.all(
+      targets.map((r) => fetch(`${API_BASE}/history/${r.id}`, { method: 'DELETE' }))
+    )
+    fetchHistory()
   }
 
   return (
     <div>
       <h1>クラブ飛距離メモ</h1>
-      <InputForm 
-        onSave={(newRecords) => setRecords(newRecords)} 
-        selectedClub={selectedClub} 
-        onClubChange={(club) => {setSelectedClub(club)}} 
-        records={records}
+      <InputForm
+        onSave={fetchHistory}
+        selectedClub={selectedClub}
+        onClubChange={(club) => { setSelectedClub(club) }}
+        clubs={clubs}
       />
-      <ClubList 
-        records={records} 
-        selectedClub={selectedClub} 
-        onDelete={handleDelete} 
+      <ClubList
+        records={records}
+        clubs={clubs}
+        selectedClub={selectedClub}
+        onDelete={handleDelete}
         onDeleteAll={handleDeleteAll}
       />
     </div>
   )
+
 }
 
 export default App

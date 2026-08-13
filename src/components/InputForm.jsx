@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { clubs } from '../data/clubs.js'
 
+const API_BASE = import.meta.env.VITE_API_BASE
 
-
-function InputForm({ onSave, selectedClub, onClubChange, records  }) {
+function InputForm({ onSave, selectedClub, onClubChange, clubs }) {
 
     const [distance, setDistance] = useState('')
-    const handleSave = () => {
+    const handleSave = async () => {
         
         if(distance === ''){
             alert ("数値を入力してください")
@@ -18,22 +17,31 @@ function InputForm({ onSave, selectedClub, onClubChange, records  }) {
             alert ("ミスショットは打ち直してください")
             return
         }
-    
-        const clubRecords = records.filter((r) => r.club === selectedClub)
-        const strokeNumber = clubRecords.length + 1
 
-        const newRecord = {
-            id: Date.now(),
-            club: selectedClub,
-            distance: Number(distance),
-            strokeNumber: strokeNumber,
-            day: new Date().toISOString().slice(0, 10)
+        const club = clubs.find((c) => c.name === selectedClub)
+
+        try {
+            const res = await fetch(`${API_BASE}/history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clubId: club.id,
+                    distance: Number(distance),
+                    date: new Date().toISOString().slice(0, 10)
+                })
+            })
+
+            if (!res.ok) {
+                alert('保存に失敗しました')
+                return
+            }
+
+            setDistance('')
+            onSave()
+        } catch (err) {
+            console.error(err)
+            alert('保存に失敗しました')
         }
-        
-        const updated = [...records, newRecord]
-        localStorage.setItem('records', JSON.stringify(updated))
-        setDistance('')
-        onSave(updated)
     
     }
 
@@ -46,7 +54,7 @@ function InputForm({ onSave, selectedClub, onClubChange, records  }) {
             <div className="input-row">
                 <select value={selectedClub} onChange={handleClubChange}>
 	                {clubs.map((club) => (
-  				        <option key={club} value={club}>{club}</option>
+  				        <option key={club.id} value={club.name}>{club.name}</option>
 			        ))}
                 </select>
                 <input type="number" value={distance} onChange={(e) => setDistance(e.target.value)}>

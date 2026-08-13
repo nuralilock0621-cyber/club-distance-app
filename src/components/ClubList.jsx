@@ -1,18 +1,17 @@
-import { clubs } from '../data/clubs.js'
 import ClubRow from './ClubRow.jsx'
 
-function ClubList({records = [], selectedClub, onDelete, onDeleteAll }) {
+function ClubList({ records = [], clubs = [], selectedClub, onDelete, onDeleteAll }) {
 
   const getAverage = (clubName) => {
-    const clubRecords = records.filter((record) => record.club === clubName)
+    const clubRecords = records.filter((record) => record.club_name === clubName)
     const sorted = clubRecords.sort((a,b) => b.id - a.id).slice(0, 3)
     const total = sorted.reduce((sum, record) => sum + record.distance, 0)
     return sorted.length > 0 ? total / sorted.length : 0
   }
 
-  const activeClubs = clubs.filter((club) => 
-    records.some((r) => r.club === club)
-  )
+  const activeClubs = clubs
+    .map((c) => c.name)
+    .filter((name) => records.some((r) => r.club_name === name))
 
   const currentIndex = activeClubs.indexOf(selectedClub)
   const average = getAverage(selectedClub)

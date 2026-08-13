@@ -3,7 +3,7 @@ import HistoryRow from './HistoryRow.jsx'
 
 function ClubRow({ selectedClub, average, neighbors, records, onDelete, onDeleteAll }) {
   const [isOpen, setIsOpen] = useState(false)
-  const clubRecords = records.filter((r) => r.club === selectedClub)
+  const clubRecords = records.filter((r) => r.club_name === selectedClub)
 
   return (
     <div className="result-card">
@@ -28,8 +28,8 @@ function ClubRow({ selectedClub, average, neighbors, records, onDelete, onDelete
       </button>
       {isOpen && (
         <>
-          {clubRecords.map((record) => (
-            <HistoryRow key={record.id} record={record} onDelete={onDelete} />
+          {clubRecords.map((record, index) => (
+            <HistoryRow key={record.id} record={record} strokeNumber={index + 1} onDelete={onDelete} />
           ))}
           <div className="delete-all-wrap">
             <button className="delete-all-btn" onClick={() => onDeleteAll(selectedClub)}>まとめて削除</button>
