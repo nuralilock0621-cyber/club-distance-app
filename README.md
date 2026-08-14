@@ -1,12 +1,19 @@
 # クラブ飛距離メモ
+
+**本番環境**: https://ryo-mrmt.github.io/club-distance-app/
+
 番手別に飛距離を記録、直近3球の平均、番手間の距離差を確認するためのアプリ。
-趣味のゴルフで番手ごとの正確な飛距離を把握するために個人開発。
 
 ## 使用技術
 
+### フロントエンド
+
 - React 19
 - Vite
-- localStorage
+
+### バックエンド
+
+- [club-distance-api](https://github.com/ryo-mrmt/club-distance-api)（Node.js + Express + PostgreSQL）
 
 ## 機能
 
@@ -41,15 +48,19 @@ App.jsx（状態管理）
 
 ## データ構造
 
+バックエンドAPI（`GET /api/history`）から返る形式：
+
 ```js
 {
-  id: Date.now(),
-  club: "7I",
+  id: 1,
+  club_id: 3,
+  club_name: "7I",
   distance: 160,
-  strokeNumber: 1,
-  day: "2026-04-28"
+  date: "2026-04-28"
 }
 ```
+
+`strokeNumber`（何球目か）はDBには保存せず、表示時に算出しています。
 
 ## テスト
 
@@ -87,6 +98,5 @@ python test_club_distance.py
 
 ## 今後の予定
 
-- Node.js + Express + データベースによるバックエンド実装
 - セッション（練習ラウンド単位）管理機能
 - レスポンシブ対応
