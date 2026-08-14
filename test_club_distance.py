@@ -1,4 +1,4 @@
-"""
+﻿"""
 クラブ飛距離メモアプリ E2Eテスト
 Selenium + Python
 事前準備: pip install selenium
@@ -8,7 +8,7 @@ Selenium + Python
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 import time
@@ -18,11 +18,34 @@ import time
 # ========================================
 driver = webdriver.Chrome()
 driver.get("http://localhost:5173")
+
+# テスト前に既存の履歴を全削除（過去の実行で溜まったデータをクリア）
+driver.execute_async_script("""
+    const callback = arguments[arguments.length - 1];
+    fetch('http://localhost:3001/api/history')
+        .then(res => res.json())
+        .then(records => Promise.all(
+            records.map(r => fetch(`http://localhost:3001/api/history/${r.id}`, { method: 'DELETE' }))
+        ))
+        .then(() => callback())
+        .catch(() => callback());
+""")
+driver.refresh()
+
 wait = WebDriverWait(driver, 10)
 
-# テスト前にlocalStorageをクリア
-driver.execute_script("localStorage.clear()")
-driver.refresh()
+# クラブ一覧のAPI取得が完了する（ドロップダウンに選択肢が入る）まで待つ
+wait.until(lambda d: len(d.find_elements(By.TAG_NAME, "option")) > 0)
+
+
+def set_input_value(element, value):
+    """Reactのcontrolled inputに対して確実に値をセットする"""
+    driver.execute_script(
+        "const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;"
+        "setter.call(arguments[0], arguments[1]);"
+        "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+        element, value
+    )
 
 
 # ========================================
@@ -30,19 +53,15 @@ driver.refresh()
 # ========================================
 print("テスト① ページ表示...")
 
-# タイトルが表示されているか
 title = driver.find_element(By.TAG_NAME, "h1")
 assert title.text == "クラブ飛距離メモ", f"タイトルが違う: {title.text}"
 
-# ドロップダウンが存在するか
 select = driver.find_element(By.TAG_NAME, "select")
 assert select is not None
 
-# 入力欄が存在するか
 input_field = driver.find_element(By.CSS_SELECTOR, "input[type='number']")
 assert input_field is not None
 
-# 記録ボタンが存在するか
 button = driver.find_element(By.TAG_NAME, "button")
 assert button.text == "保存"
 
@@ -54,11 +73,9 @@ print("  → OK：ページ要素がすべて表示されている")
 # ========================================
 print("テスト② バリデーション（空欄）...")
 
-# 空欄のまま記録ボタンを押す
 button = driver.find_element(By.TAG_NAME, "button")
 button.click()
 
-# アラートが出るか
 alert = wait.until(EC.alert_is_present())
 assert "数値を入力してください" in alert.text
 alert.accept()
@@ -71,15 +88,12 @@ print("  → OK：空欄でアラートが出た")
 # ========================================
 print("テスト③ バリデーション（0以下）...")
 
-# -10を入力して記録ボタンを押す
 input_field = driver.find_element(By.CSS_SELECTOR, "input[type='number']")
-input_field.clear()
-input_field.send_keys("-10")
+set_input_value(input_field, "-10")
 
 button = driver.find_element(By.TAG_NAME, "button")
 button.click()
 
-# アラートが出るか
 alert = wait.until(EC.alert_is_present())
 assert "ミスショット" in alert.text
 alert.accept()
@@ -92,24 +106,24 @@ print("  → OK：0以下でアラートが出た")
 # ========================================
 print("テスト④ 正常な記録...")
 
-# 入力欄をクリアして160を入力
 input_field = driver.find_element(By.CSS_SELECTOR, "input[type='number']")
-input_field.clear()
-input_field.send_keys("160")
+set_input_value(input_field, "160")
 
-# 記録ボタンを押す
 button = driver.find_element(By.TAG_NAME, "button")
 button.click()
 
-# 入力欄がリセットされたか
-time.sleep(0.5)  # 画面更新を待つ
+time.sleep(0.5)
 input_field = driver.find_element(By.CSS_SELECTOR, "input[type='number']")
 assert input_field.get_attribute("value") == "", "入力欄がリセットされていない"
 
-# localStorageにデータが保存されたか
-records = driver.execute_script("return localStorage.getItem('records')")
-assert records is not None, "localStorageにデータがない"
-assert "160" in records, "飛距離160が保存されていない"
+history_toggle = driver.find_element(By.CLASS_NAME, "history-toggle")
+history_toggle.click()
+
+distances = driver.find_elements(By.CLASS_NAME, "stroke-distance")
+distance_texts = [d.text for d in distances]
+assert any("160" in t for t in distance_texts), "飛距離160が画面に表示されていない"
+
+history_toggle.click()
 
 print("  → OK：記録が保存され入力欄がリセットされた")
 
@@ -119,20 +133,16 @@ print("  → OK：記録が保存され入力欄がリセットされた")
 # ========================================
 print("テスト⑤ 平均表示...")
 
-# 2球目: 155を記録
 input_field = driver.find_element(By.CSS_SELECTOR, "input[type='number']")
-input_field.send_keys("155")
+set_input_value(input_field, "155")
 driver.find_element(By.TAG_NAME, "button").click()
 time.sleep(0.3)
 
-# 3球目: 165を記録
 input_field = driver.find_element(By.CSS_SELECTOR, "input[type='number']")
-input_field.send_keys("165")
+set_input_value(input_field, "165")
 driver.find_element(By.TAG_NAME, "button").click()
 time.sleep(0.3)
 
-# 平均が160になっているか
-# (160 + 155 + 165) / 3 = 160
 page_text = driver.find_element(By.CLASS_NAME, "result-card").text
 assert "160" in page_text, f"平均160が表示されていない: {page_text}"
 
@@ -144,21 +154,16 @@ print("  → OK：直近3球の平均が正しく表示された")
 # ========================================
 print("テスト⑥ クラブ切り替え...")
 
-# ドロップダウンを8Iに変更
-from selenium.webdriver.support.ui import Select
-
 select_element = driver.find_element(By.TAG_NAME, "select")
 select = Select(select_element)
 select.select_by_value("8I")
 time.sleep(0.3)
 
-# 8Iで148を記録
 input_field = driver.find_element(By.CSS_SELECTOR, "input[type='number']")
-input_field.send_keys("148")
+set_input_value(input_field, "148")
 driver.find_element(By.TAG_NAME, "button").click()
 time.sleep(0.3)
 
-# 8Iの平均が表示されているか
 page_text = driver.find_element(By.CLASS_NAME, "result-card").text
 assert "148" in page_text, f"8Iの平均148が表示されていない: {page_text}"
 
@@ -170,23 +175,19 @@ print("  → OK：クラブ切り替えと記録が正常")
 # ========================================
 print("テスト⑦ 履歴の開閉...")
 
-# 1Wに戻して履歴を確認
 select_element = driver.find_element(By.TAG_NAME, "select")
 select = Select(select_element)
 select.select_by_value("1W")
 time.sleep(0.3)
 
-# 履歴を見るボタンを押す
 toggle_button = driver.find_element(By.CLASS_NAME, "history-toggle")
 assert "履歴を見る" in toggle_button.text
 toggle_button.click()
 time.sleep(0.3)
 
-# 履歴行が表示されたか
 history_rows = driver.find_elements(By.CLASS_NAME, "history-row")
 assert len(history_rows) == 3, f"履歴が3件ではない: {len(history_rows)}件"
 
-# 閉じるボタンに変わっているか
 toggle_button = driver.find_element(By.CLASS_NAME, "history-toggle")
 assert "閉じる" in toggle_button.text
 
@@ -198,12 +199,10 @@ print("  → OK：履歴の開閉が正常")
 # ========================================
 print("テスト⑧ 1件削除...")
 
-# 最初の削除ボタンを押す
 delete_buttons = driver.find_elements(By.CLASS_NAME, "delete-btn")
 delete_buttons[0].click()
 time.sleep(0.3)
 
-# 履歴が2件に減ったか
 history_rows = driver.find_elements(By.CLASS_NAME, "history-row")
 assert len(history_rows) == 2, f"履歴が2件ではない: {len(history_rows)}件"
 
@@ -215,12 +214,10 @@ print("  → OK：1件削除が正常")
 # ========================================
 print("テスト⑨ まとめて削除...")
 
-# まとめて削除ボタンを押す
 delete_all_button = driver.find_element(By.CLASS_NAME, "delete-all-btn")
 delete_all_button.click()
 time.sleep(0.3)
 
-# 履歴が消えたか
 history_rows = driver.find_elements(By.CLASS_NAME, "history-row")
 assert len(history_rows) == 0, f"履歴が残っている: {len(history_rows)}件"
 
@@ -232,23 +229,19 @@ print("  → OK：まとめて削除が正常")
 # ========================================
 print("テスト⑩ リロード後の永続化...")
 
-# 8Iのデータはまだ残っているはず
 select_element = driver.find_element(By.TAG_NAME, "select")
 select = Select(select_element)
 select.select_by_value("8I")
 time.sleep(0.3)
 
-# リロード
 driver.refresh()
 time.sleep(0.5)
 
-# 8Iに切り替え
 select_element = driver.find_element(By.TAG_NAME, "select")
 select = Select(select_element)
 select.select_by_value("8I")
 time.sleep(0.3)
 
-# 8Iのデータが残っているか
 page_text = driver.find_element(By.CLASS_NAME, "result-card").text
 assert "148" in page_text, "リロード後にデータが消えた"
 
